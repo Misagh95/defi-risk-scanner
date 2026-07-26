@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeFi Risk Scanner</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#070712; color:#e2e8f0; min-height:100vh; }
+  .container { max-width:640px; margin:0 auto; padding:20px; }
+  h1 { font-size:22px; font-weight:800; margin-bottom:4px; }
+  .sub { color:#475569; font-size:13px; margin-bottom:20px; }
+  input, button { width:100%; padding:10px 14px; border-radius:8px; border:1px solid #1a1a2e; background:#0f0f20; color:#e2e8f0; font-size:14px; outline:none; }
+  input:focus { border-color:#7c3aed; }
+  button { background:#7c3aed; border-color:#7c3aed; color:#fff; font-weight:600; cursor:pointer; margin-top:8px; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .result { margin-top:16px; }
+  .card { background:#0f0f20; border:1px solid #1a1a2e; border-radius:10px; padding:12px; margin-bottom:8px; }
+  .tag { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
+  .safe { background:#052e16; color:#22c55e; }
+  .low { background:#1c1917; color:#eab308; }
+  .medium { background:#1c1917; color:#eab308; }
+  .high { background:#2c1010; color:#f97316; }
+  .critical { background:#2c1010; color:#ef4444; }
+  #loading { display:none; text-align:center; padding:40px; color:#64748b; }
+  .error { color:#ef4444; padding:12px; }
+  .summary { margin:12px 0; }
+  .summary li { list-style:none; padding:4px 0; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🛡 DeFi Risk Scanner</h1>
+  <div class="sub">Check wallet interactions for risky contracts, sanctions, and honeypots</div>
+  <input id="address" placeholder="0x... wallet address" autocomplete="off">
+  <button id="scanBtn" onclick="scan()">Scan Wallet</button>
+  <div id="loading"><div class="spinner"></div> Scanning across 6 security layers...</div>
+  <div id="result" class="result"></div>
+</div>
+<script>
+async function scan() {
+  const addr = document.getElementById('address').value.trim();
+  const btn = document.getElementById('scanBtn');
+  const loading = document.getElementById('loading');
+  const result = document.getElementById('result');
+
+  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+    result.innerHTML = '<div class="error">Invalid address</div>'; return;
+  }
+
+  btn.disabled = true; loading.style.display = 'block'; result.innerHTML = '';
+  try {
+    const r = await fetch('/api/scan?address=' + addr);
+    const data = await r.json();
+    if (data.error) { result.innerHTML = '<div class="error">' + data.error + '</div>'; return; }
+
+    let html = `<div class="card">
+      <strong>Wallet</strong> ${addr.slice(0,10)}...${addr.slice(-4)}
+      <span class="tag ${data.overallRisk}">${data.overallRisk.toUpperCase()} ${data.overallRiskScore}/100</span><br>
+      <span style="font-size:12px;color:#64748b">${data.totalTransactions} txs · ${data.chains.join(', ')} · ${data.totalInteractions} contracts</span>
+    </div>`;
+
+    if (data.sanctioned) html += '<div class="card" style="border-color:#ef4444">🚨 WALLET IS SANCTIONED</div>';
+
+    html += '<div class="summary"><ul>';
+    for (const s of data.summary) {
+      const emoji = s.startsWith('No') ? '✅' : s.startsWith('WALLET') ? '🚨' : '⚠️';
+      html += '<li>' + emoji + ' ' + s + '</li>';
+    }
+    html += '</ul></div>';
+
+    for (const c of data.contracts) {
+      const risk = c.risk.goPlus;
+      const warnings = c.warnings || [];
+      html += `<div class="card">
+        <strong>${c.name || c.symbol || c.address.slice(0,10)}</strong>
+        <span class="tag ${risk}">${risk.toUpperCase()}</span>
+        <span style="font-size:11px;color:#64748b">${c.chain} · ${c.txCount} txs</span><br>
+        <span style="font-size:11px;color:#64748b">DEX: ${c.risk.dex} · ${c.risk.verified ? '✅ Verified' : '❌ Unverified'} · ${c.risk.listedOnCoinGecko ? '✅ CG' : '❌ No CG'}</span>
+        ${warnings.length ? '<br><span style="font-size:11px;color:#f97316">' + warnings.join('; ') + '</span>' : ''}
+      </div>`;
+    }
+    result.innerHTML = html;
+  } catch (e) {
+    result.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+  }
+  btn.disabled = false; loading.style.display = 'none';
+}
+</script>
+</body>
+</html>
