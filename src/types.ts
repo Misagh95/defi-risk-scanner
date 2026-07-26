@@ -44,6 +44,56 @@ export interface WalletAnalysis {
   summary: string[];
 }
 
+export interface DexScreenerPair {
+  chainId: string;
+  dexId: string;
+  url: string;
+  pairAddress: string;
+  baseToken: { address: string; name: string; symbol: string };
+  quoteToken: { address: string; name: string; symbol: string };
+  priceNative: string;
+  priceUsd: string;
+  txns: { h24: { buys: number; sells: number } };
+  volume: { h24: number };
+  priceChange: { h24: number };
+  liquidity: { usd: number; base: number; quote: number };
+  fdv: number;
+  pairCreatedAt: number;
+  labels?: string[];
+}
+
+export interface DexScreenerResult {
+  liquidityUsd: number | null;
+  fdv: number | null;
+  pairCreatedAt: number | null;
+  priceUsd: string | null;
+  priceChange24h: number | null;
+  volume24h: number | null;
+  buys24h: number | null;
+  sells24h: number | null;
+  riskLevel: 'safe' | 'low' | 'medium' | 'high' | 'critical';
+  riskScore: number;
+  details: string[];
+}
+
+export interface CgListResult {
+  listed: boolean;
+  name: string | null;
+  symbol: string | null;
+  marketCapRank: number | null;
+  riskLevel: 'safe' | 'low' | 'medium' | 'high' | 'critical';
+  riskScore: number;
+  details: string[];
+}
+
+export interface EtherscanLabelResult {
+  flagged: boolean;
+  label: string | null;
+  riskLevel: 'safe' | 'low' | 'medium' | 'high' | 'critical';
+  riskScore: number;
+  details: string[];
+}
+
 export interface GoPlusResponse {
   code: number;
   message: string;

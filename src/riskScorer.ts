@@ -1,4 +1,4 @@
-import { TokenRisk, ContractVerification, SanctionCheck, WalletAnalysis } from './types';
+import { TokenRisk, ContractVerification, SanctionCheck, DexScreenerResult, CgListResult, EtherscanLabelResult, WalletAnalysis } from './types';
 
 export class RiskScorer {
   analyzeWallet(
@@ -6,15 +6,16 @@ export class RiskScorer {
     sanction: SanctionCheck,
     contracts: TokenRisk[],
     verifications: ContractVerification[],
+    dexResults: DexScreenerResult[],
+    cgResults: CgListResult[],
+    labelResults: EtherscanLabelResult[],
   ): WalletAnalysis {
     const allDetails: string[] = [];
     let totalScore = 0;
-    let maxScore = contracts.length * 100 + 100; // contracts + sanction
+    const maxScore = contracts.length * 100 + 100 + dexResults.length * 100 + cgResults.length * 100 + 100;
 
-    // Sanction score
     totalScore += sanction.riskScore;
 
-    // Contract scores
     for (const ct of contracts) {
       totalScore += ct.riskScore;
       allDetails.push(...ct.details.map(d => `[${ct.chain}:${ct.address.slice(0, 8)}] ${d}`));
@@ -26,7 +27,21 @@ export class RiskScorer {
       }
     }
 
-    // Normalize to 0-100
+    for (const d of dexResults) {
+      totalScore += d.riskScore;
+      allDetails.push(...d.details.map(s => `[DEX] ${s}`));
+    }
+
+    for (const c of cgResults) {
+      totalScore += c.riskScore;
+      allDetails.push(...c.details.map(s => `[CG] ${s}`));
+    }
+
+    for (const l of labelResults) {
+      totalScore += l.riskScore;
+      allDetails.push(...l.details.map(s => `[Label] ${s}`));
+    }
+
     const normalizedScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
     const totalRiskLevel = normalizedScore >= 70 ? 'critical'
@@ -36,12 +51,14 @@ export class RiskScorer {
       : 'safe';
 
     const summary: string[] = [];
-
     if (sanction.sanctioned) summary.push('WALLET IS SANCTIONED');
     if (contracts.some(c => c.isHoneypot)) summary.push('Honeypot contracts detected');
-    if (contracts.some(c => !c.isOpenSource)) summary.push('Unverified contracts found');
-    if (contracts.some(c => c.canOwnerMint)) summary.push('Contracts with owner mint capability');
-    if (contracts.some(c => c.riskLevel === 'critical')) summary.push('Critical risk contracts found');
+    if (contracts.some(c => !c.isOpenSource)) summary.push('Unverified contracts');
+    if (contracts.some(c => c.canOwnerMint)) summary.push('Contracts with owner mint');
+    if (contracts.some(c => c.riskLevel === 'critical')) summary.push('Critical risk contracts');
+    if (dexResults.some(d => d.riskLevel === 'critical')) summary.push('Critical DEX risk (low liquidity / wash trading)');
+    if (cgResults.some(c => !c.listed)) summary.push('Tokens not listed on CoinGecko');
+    if (labelResults.some(l => l.flagged)) summary.push('Wallet flagged in scam database');
     if (summary.length === 0) summary.push('No major risk flags');
 
     return {
