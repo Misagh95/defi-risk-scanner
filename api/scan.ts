@@ -43,9 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         totalTransactions: txData.totalTxs,
         chains: txData.chains,
         interactions: [],
-        riskScore: sanctionResult.riskScore + labelResult.riskScore,
-        riskLevel: sanctionResult.sanctioned ? 'critical' : 'safe',
+        scannedCount: 0,
+        overallRisk: sanctionResult.sanctioned ? 'critical' : 'safe',
+        overallRiskScore: sanctionResult.riskScore + labelResult.riskScore,
         summary: ['No contract interactions found'],
+        contracts: [],
       });
     }
 
