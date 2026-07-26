@@ -3,41 +3,230 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DeFi Risk Scanner</title>
+<title>DeFi Risk Scanner — Arkham Intelligence</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#070712; color:#e2e8f0; min-height:100vh; }
-  .container { max-width:640px; margin:0 auto; padding:20px; }
-  h1 { font-size:22px; font-weight:800; margin-bottom:4px; }
-  .sub { color:#475569; font-size:13px; margin-bottom:20px; }
-  input, button { width:100%; padding:10px 14px; border-radius:8px; border:1px solid #1a1a2e; background:#0f0f20; color:#e2e8f0; font-size:14px; outline:none; }
-  input:focus { border-color:#7c3aed; }
-  button { background:#7c3aed; border-color:#7c3aed; color:#fff; font-weight:600; cursor:pointer; margin-top:8px; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  .result { margin-top:16px; }
-  .card { background:#0f0f20; border:1px solid #1a1a2e; border-radius:10px; padding:12px; margin-bottom:8px; }
-  .tag { display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Vazirmatn',sans-serif; background:#070712; color:#e2e8f0; min-height:100vh; }
+  .container { max-width:1200px; margin:0 auto; padding:20px; }
+
+  /* Header */
+  .header { display:flex; align-items:center; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
+  .logo { font-size:22px; font-weight:800; background:linear-gradient(135deg,#7c3aed,#a855f7); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .logo-sub { font-size:11px; color:#475569; letter-spacing:2px; text-transform:uppercase; }
+  .search-box { flex:1; min-width:300px; display:flex; gap:8px; }
+  .search-box input { flex:1; padding:10px 14px; border-radius:8px; border:1px solid #1a1a2e; background:#0f0f20; color:#e2e8f0; font-size:14px; outline:none; }
+  .search-box input:focus { border-color:#7c3aed; }
+  .search-box button { padding:10px 20px; border-radius:8px; border:none; background:#7c3aed; color:#fff; font-weight:600; cursor:pointer; font-size:13px; }
+  .search-box button:disabled { opacity:.5; cursor:not-allowed; }
+  .mode-toggle { display:flex; gap:4px; background:#0f0f20; border:1px solid #1a1a2e; border-radius:8px; padding:3px; }
+  .mode-toggle button { padding:6px 14px; border-radius:6px; border:none; background:transparent; color:#64748b; cursor:pointer; font-size:12px; font-weight:600; }
+  .mode-toggle button.active { background:#7c3aed; color:#fff; }
+
+  /* Loading */
+  .loading { display:none; text-align:center; padding:60px; color:#64748b; }
+  .spinner { width:36px; height:36px; border:3px solid #1a1a2e; border-top-color:#7c3aed; border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Error */
+  .error { background:#2c1010; border:1px solid #7f1d1d; border-radius:10px; padding:16px; color:#ef4444; font-size:13px; }
+
+  /* Grid layout */
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .grid-full { grid-column:1/-1; }
+
+  /* Cards */
+  .card { background:#0f0f20; border:1px solid #1a1a2e; border-radius:12px; padding:16px; }
+  .card-title { font-size:10px; color:#475569; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:12px; font-weight:600; }
+  .card-value { font-size:24px; font-weight:700; }
+
+  /* Risk Bar */
+  .risk-bar-wrap { height:10px; background:#1a1a2e; border-radius:5px; overflow:hidden; margin:8px 0; }
+  .risk-bar-fill { height:100%; border-radius:5px; transition:width .6s ease; }
+  .risk-label { font-size:13px; font-weight:700; }
+
+  /* Entity Badge */
+  .entity-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; }
+  .entity-cex { background:#1e3a5f; color:#60a5fa; }
+  .entity-dex { background:#1e3a2f; color:#4ade80; }
+  .entity-bridge { background:#3b1e5f; color:#c084fc; }
+  .entity-mixer { background:#5f1e1e; color:#f87171; }
+  .entity-hacker { background:#5f0a0a; color:#ff4444; }
+  .entity-lending { background:#1e3a4f; color:#38bdf8; }
+  .entity-staking { background:#1e3a3f; color:#34d399; }
+  .entity-mev { background:#3b3b1e; color:#facc15; }
+  .entity-unknown { background:#1a1a2e; color:#64748b; }
+
+  /* Tags */
+  .tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600; }
   .safe { background:#052e16; color:#22c55e; }
   .low { background:#1c1917; color:#eab308; }
   .medium { background:#1c1917; color:#eab308; }
   .high { background:#2c1010; color:#f97316; }
   .critical { background:#2c1010; color:#ef4444; }
-  #loading { display:none; text-align:center; padding:40px; color:#64748b; }
-  .error { color:#ef4444; padding:12px; }
-  .summary { margin:12px 0; }
-  .summary li { list-style:none; padding:4px 0; font-size:13px; }
+
+  /* Stat rows */
+  .stat-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .stat { background:#070712; border:1px solid #1a1a2e; border-radius:8px; padding:8px 10px; flex:1; min-width:80px; }
+  .stat-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+  .stat-val { font-size:15px; font-weight:700; margin-top:2px; }
+
+  /* Counterparty list */
+  .cp-list { max-height:220px; overflow-y:auto; }
+  .cp-item { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid #1a1a2e; font-size:12px; }
+  .cp-item:last-child { border-bottom:none; }
+  .cp-addr { font-family:monospace; font-size:11px; color:#94a3b8; }
+  .cp-value { font-weight:600; }
+  .cp-count { color:#64748b; font-size:10px; }
+
+  /* Asset list */
+  .asset-list { max-height:200px; overflow-y:auto; }
+  .asset-item { display:flex; align-items:center; justify-content:space-between; padding:5px 0; border-bottom:1px solid #1a1a2e; font-size:12px; }
+  .asset-item:last-child { border-bottom:none; }
+  .asset-sym { font-weight:600; min-width:50px; }
+  .asset-val { color:#94a3b8; }
+  .asset-chain { font-size:9px; color:#475569; text-transform:uppercase; }
+
+  /* Chain bar */
+  .chain-bar { display:flex; height:20px; border-radius:4px; overflow:hidden; margin:8px 0; }
+  .chain-seg { display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:600; color:#fff; }
+
+  /* Evidence list */
+  .ev-list { font-size:11px; color:#94a3b8; }
+  .ev-list li { padding:2px 0; list-style:none; }
+  .ev-list li::before { content:'•'; color:#7c3aed; margin-right:6px; }
+
+  /* Summary */
+  .summary-list { font-size:13px; }
+  .summary-list li { list-style:none; padding:3px 0; }
+
+  /* Divider */
+  .divider { height:1px; background:linear-gradient(90deg,transparent,#1a1a2e,transparent); margin:14px 0; }
+
+  /* Responsive */
+  @media (max-width:768px) {
+    .grid { grid-template-columns:1fr; }
+    .header { flex-direction:column; align-items:stretch; }
+    .search-box { min-width:auto; }
+  }
+
+  /* Tooltip */
+  .hint { font-size:10px; color:#475569; margin-top:4px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:#070712; }
+  ::-webkit-scrollbar-thumb { background:#1a1a2e; border-radius:2px; }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>🛡 DeFi Risk Scanner</h1>
-  <div class="sub">Check wallet interactions for risky contracts, sanctions, and honeypots</div>
-  <input id="address" placeholder="0x... wallet address" autocomplete="off">
-  <button id="scanBtn" onclick="scan()">Scan Wallet</button>
-  <div id="loading"><div class="spinner"></div> Scanning across 6 security layers...</div>
-  <div id="result" class="result"></div>
+  <div class="header">
+    <div>
+      <div class="logo">🛡 Arkham Intelligence</div>
+      <div class="logo-sub">DeFi Risk Scanner</div>
+    </div>
+    <div class="mode-toggle">
+      <button id="modeArkham" class="active" onclick="setMode('arkham')">Arkham</button>
+      <button id="modeBasic" onclick="setMode('basic')">Basic</button>
+    </div>
+    <div class="mode-toggle">
+      <button id="langEn" class="active" onclick="setLang('en')">EN</button>
+      <button id="langFa" onclick="setLang('fa')">FA</button>
+    </div>
+    <div class="search-box">
+      <input id="address" placeholder="0x... wallet address" autocomplete="off" spellcheck="false">
+      <button id="scanBtn" onclick="scan()">Scan</button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <span id="loadingText">Gathering on-chain intelligence across 30+ chains...</span>
+  </div>
+  <div id="result"></div>
 </div>
+
 <script>
+let mode = 'arkham';
+let lang = 'en';
+
+const LANG = {
+  en: {
+    scan: 'Scan', loading: 'Gathering on-chain intelligence across 30+ chains...',
+    invalidAddr: 'Invalid Ethereum address', error: 'Error',
+    entity: 'Entity', portfolio: 'Portfolio', flow: 'Fund Flow Analysis',
+    patterns: 'Transaction Patterns', riskBreakdown: 'Risk Breakdown',
+    totalValue: 'Total Value', assets: 'Assets', chains: 'Chains',
+    inflow: 'Inflow', outflow: 'Outflow', stablecoins: 'Stablecoins',
+    portfolioRisk: 'Portfolio Risk', chainDiv: 'Chain Diversification',
+    topAssets: 'Top Assets', topSenders: 'Top Senders (inflow)',
+    topReceivers: 'Top Receivers (outflow)', flowRisk: 'Flow Risk',
+    dominantProfile: 'Dominant profile', clean: 'CLEAN',
+    dataLimited: 'Native balance only. For full token & transaction analysis, add ALCHEMY_API_KEY.',
+    noHistory: 'No transaction history found',
+    sanctions: 'Sanctions', labels: 'Labels', exploitDB: 'Exploit DB',
+    score: 'Score', confidence: 'confidence', riskMult: 'x risk multiplier',
+    txs: 'txs', profile: 'profile',
+    summary: 'Risk Intelligence Summary', flags: 'Flags',
+  },
+  fa: {
+    scan: 'اسکن', loading: 'در حال گردآوری اطلاعات زنجیره‌ای از ۳۰+ شبکه...',
+    invalidAddr: 'آدرس اتریوم نامعتبر', error: 'خطا',
+    entity: 'نهاد', portfolio: 'پرتفوی', flow: 'تحلیل جریان وجوه',
+    patterns: 'الگوهای تراکنش', riskBreakdown: 'تفکیک ریسک',
+    totalValue: 'ارزش کل', assets: 'دارایی', chains: 'شبکه',
+    inflow: 'ورودی', outflow: 'خروجی', stablecoins: 'استیبل کوین',
+    portfolioRisk: 'ریسک پرتفوی', chainDiv: 'تنوع شبکه‌ای',
+    topAssets: 'دارایی‌های برتر', topSenders: 'فرستندگان برتر (ورودی)',
+    topReceivers: 'گیرندگان برتر (خروجی)', flowRisk: 'ریسک جریان',
+    dominantProfile: 'پروفایل غالب', clean: 'پاک',
+    dataLimited: 'فقط موجودی native. برای توکن‌ها و تراکنش‌ها ALCHEMY_API_KEY نیاز است.',
+    noHistory: 'تاریخچه تراکنش یافت نشد',
+    sanctions: 'تحریم‌ها', labels: 'برچسب‌ها', exploitDB: 'اکسپلویت',
+    score: 'امتیاز', confidence: 'اطمینان', riskMult: 'ضریب ریسک',
+    txs: 'تراکنش', profile: 'پروفایل',
+    summary: 'خلاصه اطلاعات ریسک', flags: 'پرچم‌ها',
+  }
+};
+
+function t(key) { return LANG[lang]?.[key] || LANG.en[key] || key; }
+
+function setLang(l) {
+  lang = l;
+  document.getElementById('langEn').className = l === 'en' ? 'active' : '';
+  document.getElementById('langFa').className = l === 'fa' ? 'active' : '';
+  document.getElementById('scanBtn').textContent = t('scan');
+  document.getElementById('loadingText').textContent = t('loading');
+}
+
+function cls(level) {
+  return { safe:'safe', low:'low', medium:'medium', high:'high', critical:'critical' }[level] || 'safe';
+}
+
+function fmt(v) {
+  if (!v) return '$0';
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return '$' + (v/1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return '$' + (v/1e3).toFixed(1) + 'K';
+  return '$' + v.toFixed(0);
+}
+
+function shorten(addr) {
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function entityClass(cat) {
+  const map = {
+    cex:'entity-cex', dex:'entity-dex', bridge:'entity-bridge',
+    mixer:'entity-mixer', hacker:'entity-hacker', phishing:'entity-hacker',
+    lending:'entity-lending', liquid_staking:'entity-staking', restaking:'entity-staking',
+    mev_bot:'entity-mev', arb_bot:'entity-mev', unknown:'entity-unknown',
+    sanctioned:'entity-mixer', exploit_contract:'entity-hacker',
+    sybil:'entity-mev',
+  };
+  return map[cat] || 'entity-unknown';
+}
+
 async function scan() {
   const addr = document.getElementById('address').value.trim();
   const btn = document.getElementById('scanBtn');
@@ -45,47 +234,291 @@ async function scan() {
   const result = document.getElementById('result');
 
   if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-    result.innerHTML = '<div class="error">Invalid address</div>'; return;
+    result.innerHTML = '<div class="error">' + t('invalidAddr') + '</div>'; return;
   }
 
   btn.disabled = true; loading.style.display = 'block'; result.innerHTML = '';
+
   try {
-    const r = await fetch('/api/scan?address=' + addr);
-    const data = await r.json();
-    if (data.error) { result.innerHTML = '<div class="error">' + data.error + '</div>'; return; }
-
-    let html = `<div class="card">
-      <strong>Wallet</strong> ${addr.slice(0,10)}...${addr.slice(-4)}
-      <span class="tag ${data.overallRisk}">${data.overallRisk.toUpperCase()} ${data.overallRiskScore}/100</span><br>
-      <span style="font-size:12px;color:#64748b">${data.totalTransactions} txs · ${data.chains.join(', ')} · ${data.totalInteractions} contracts</span>
-    </div>`;
-
-    if (data.sanctioned) html += '<div class="card" style="border-color:#ef4444">🚨 WALLET IS SANCTIONED</div>';
-
-    html += '<div class="summary"><ul>';
-    for (const s of data.summary) {
-      const emoji = s.startsWith('No') ? '✅' : s.startsWith('WALLET') ? '🚨' : '⚠️';
-      html += '<li>' + emoji + ' ' + s + '</li>';
+    if (mode === 'arkham') {
+      await scanArkham(addr, result);
+    } else {
+      await scanBasic(addr, result);
     }
-    html += '</ul></div>';
-
-    for (const c of data.contracts) {
-      const risk = c.risk.goPlus;
-      const warnings = c.warnings || [];
-      html += `<div class="card">
-        <strong>${c.name || c.symbol || c.address.slice(0,10)}</strong>
-        <span class="tag ${risk}">${risk.toUpperCase()}</span>
-        <span style="font-size:11px;color:#64748b">${c.chain} · ${c.txCount} txs</span><br>
-        <span style="font-size:11px;color:#64748b">DEX: ${c.risk.dex} · ${c.risk.verified ? '✅ Verified' : '❌ Unverified'} · ${c.risk.listedOnCoinGecko ? '✅ CG' : '❌ No CG'}</span>
-        ${warnings.length ? '<br><span style="font-size:11px;color:#f97316">' + warnings.join('; ') + '</span>' : ''}
-      </div>`;
-    }
-    result.innerHTML = html;
   } catch (e) {
-    result.innerHTML = '<div class="error">Error: ' + e.message + '</div>';
+    result.innerHTML = '<div class="error">' + t('error') + ': ' + e.message + '</div>';
   }
   btn.disabled = false; loading.style.display = 'none';
 }
+
+async function scanArkham(addr, result) {
+  const r = await fetch('/api/arkham?address=' + addr + '&lang=' + lang);
+  const d = await r.json();
+  if (d.error) { result.innerHTML = '<div class="error">' + d.error + '</div>'; return; }
+
+  const riskPct = d.totalRiskScore;
+  const riskColor = riskPct >= 70 ? '#ef4444' : riskPct >= 50 ? '#f97316' : riskPct >= 30 ? '#eab308' : riskPct >= 10 ? '#22c55e' : '#22c55e';
+
+  let html = '';
+
+  // Entity card
+  const e = d.entity;
+  html += `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+      <div>
+        <span class="entity-badge ${entityClass(e.category)}">${e.category.toUpperCase()}</span>
+        <span style="font-size:18px;font-weight:700;margin-left:8px">${e.name || shorten(addr)}</span>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">
+          ${shorten(addr)} · ${(e.confidence*100).toFixed(0)}% ${t('confidence')} · ${e.riskMultiplier}x ${t('riskMult')}
+        </div>
+        <div style="margin-top:6px">
+          ${e.tags.map(t => '<span class="tag safe">' + t + '</span>').join(' ')}
+        </div>
+        ${e.evidence.length ? `<ul class="ev-list" style="margin-top:6px">${e.evidence.map(ev => '<li>' + ev + '</li>').join('')}</ul>` : ''}
+      </div>
+      <div style="text-align:right;min-width:120px">
+        <div class="risk-label" style="color:${riskColor}">${d.totalRiskLevel.toUpperCase()}</div>
+        <div style="font-size:28px;font-weight:800;color:${riskColor}">${riskPct}<span style="font-size:14px;font-weight:400;color:#475569">/100</span></div>
+        <div class="risk-bar-wrap" style="width:120px;margin:6px 0 0 auto">
+          <div class="risk-bar-fill" style="width:${riskPct}%;background:${riskColor}"></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // Summary
+  if (d.summary && d.summary.length) {
+    html += `<div class="card" style="margin-bottom:14px">
+      <div class="card-title">${t('summary')}</div>
+      <ul class="summary-list">${d.summary.map(s => '<li>' + s + '</li>').join('')}</ul>
+    </div>`;
+  }
+
+  // Flags row
+  const flags = d.flags;
+  const flagItems = [];
+  if (flags.sanctioned) flagItems.push('<span class="tag critical">' + t('sanctions') + '</span>');
+  if (flags.flagged) flagItems.push('<span class="tag high">FLAGGED: ' + (flags.label || '') + '</span>');
+  if (flags.exploitDb) flagItems.push('<span class="tag critical">' + t('exploitDB') + '</span>');
+  if (!flagItems.length) flagItems.push('<span class="tag safe">' + t('clean') + '</span>');
+
+  html += `<div class="stat-row" style="margin-bottom:14px">
+    <div class="stat"><span class="stat-label">${t('flags')}</span><div style="margin-top:4px">${flagItems.join(' ')}</div></div>
+    ${flags.sanctionList ? '<div class="stat"><span class="stat-label">' + t('sanctions') + '</span><div class="stat-val">' + flags.sanctionList + '</div></div>' : ''}
+  </div>`;
+
+  // Grid for portfolio + flow
+  html += '<div class="grid">';
+
+  // Portfolio
+  const pf = d.portfolio;
+  const hasPortfolio = pf.totalValueUsd > 0 || pf.assetCount > 0;
+  html += `<div class="card">
+    <div class="card-title">${t('portfolio')}</div>
+    <div class="stat-row">
+      <div class="stat"><span class="stat-label">${t('totalValue')}</span><div class="stat-val">${fmt(pf.totalValueUsd)}</div></div>
+      <div class="stat"><span class="stat-label">${t('assets')}</span><div class="stat-val">${pf.assetCount}</div></div>
+      <div class="stat"><span class="stat-label">${t('chains')}</span><div class="stat-val">${pf.chainCount}</div></div>
+    </div>`;
+
+  if (!hasPortfolio && d.flow.incomingCount === 0) {
+    html += `<div style="margin-top:8px;font-size:11px;color:#64748b;padding:8px;background:#0a0a18;border-radius:6px">⚡ ${t('dataLimited')}</div>`;
+  }
+
+  if (pf.stablecoinPercentage !== undefined) {
+    html += `<div class="stat-row" style="margin-top:8px">
+      <div class="stat"><span class="stat-label">${t('stablecoins')}</span><div class="stat-val">${pf.stablecoinPercentage.toFixed(1)}%</div></div>
+      <div class="stat"><span class="stat-label">${t('portfolioRisk')}</span><span class="tag ${cls(pf.riskLevel)}" style="margin-left:6px">${pf.riskLevel.toUpperCase()}</span></div>
+    </div>`;
+  }
+
+  if (pf.diversification && pf.diversification.length) {
+    const colors = ['#7c3aed','#3b82f6','#22c55e','#eab308','#f97316','#ef4444','#ec4899','#14b8a6'];
+    const totalPct = pf.diversification.reduce((s, c) => s + c.percentage, 0);
+    html += `<div style="margin-top:8px;font-size:10px;color:#475569">${t('chainDiv')}</div>
+    <div class="chain-bar">`;
+    pf.diversification.forEach((c, i) => {
+      const w = Math.max(1, (c.percentage / totalPct) * 100);
+      html += `<div class="chain-seg" style="width:${w}%;background:${colors[i % colors.length]}" title="${c.chain}: ${c.percentage.toFixed(1)}%">${w > 10 ? c.chain.slice(0,4) : ''}</div>`;
+    });
+    html += `</div>`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">`;
+    pf.diversification.forEach((c, i) => {
+      html += `<span style="font-size:9px;color:#64748b">${c.chain} ${c.percentage.toFixed(1)}%</span>`;
+    });
+    html += `</div>`;
+  }
+
+  if (pf.topAssets && pf.topAssets.length) {
+    html += `<div style="margin-top:10px;font-size:10px;color:#475569;text-transform:uppercase">${t('topAssets')}</div>
+    <div class="asset-list">`;
+    pf.topAssets.forEach(a => {
+      html += `<div class="asset-item">
+        <span class="asset-sym">${a.symbol || '?'}</span>
+        <span class="asset-val">${a.balance}</span>
+        <span>${fmt(a.valueUsd)}</span>
+        <span class="asset-chain">${a.chain}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  // Flow
+  const fl = d.flow;
+  html += `<div class="card">
+    <div class="card-title">${t('flow')}</div>
+    <div class="stat-row">
+      <div class="stat"><span class="stat-label">${t('inflow')}</span><div class="stat-val" style="color:#22c55e">${fmt(fl.incomingValueUsd)}</div></div>
+      <div class="stat"><span class="stat-label">${t('outflow')}</span><div class="stat-val" style="color:#ef4444">${fmt(fl.outgoingValueUsd)}</div></div>
+      <div class="stat"><span class="stat-label">${t('flowRisk')}</span><span class="tag ${cls(fl.riskLevel)}" style="margin-left:6px">${fl.riskLevel.toUpperCase()}</span></div>
+    </div>`;
+
+  if (fl.senders && fl.senders.length) {
+    html += `<div style="margin-top:10px;font-size:10px;color:#475569;text-transform:uppercase">${t('topSenders')}</div>
+    <div class="cp-list">`;
+    fl.senders.forEach(s => {
+      html += `<div class="cp-item">
+        <div>
+          <span class="cp-addr">${shorten(s.address)}</span>
+          <span class="entity-badge ${entityClass(s.entity)}" style="font-size:9px;padding:1px 5px">${s.entity}</span>
+        </div>
+        <div>
+          <span class="cp-value">${fmt(s.totalUsd)}</span>
+          <span class="cp-count">${s.txCount} ${t('txs')}</span>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (fl.receivers && fl.receivers.length) {
+    html += `<div style="margin-top:8px;font-size:10px;color:#475569;text-transform:uppercase">${t('topReceivers')}</div>
+    <div class="cp-list">`;
+    fl.receivers.forEach(r => {
+      html += `<div class="cp-item">
+        <div>
+          <span class="cp-addr">${shorten(r.address)}</span>
+          <span class="entity-badge ${entityClass(r.entity)}" style="font-size:9px;padding:1px 5px">${r.entity}</span>
+        </div>
+        <div>
+          <span class="cp-value">${fmt(r.totalUsd)}</span>
+          <span class="cp-count">${r.txCount} ${t('txs')}</span>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  html += '</div>'; // end grid
+
+  // Patterns
+  const pt = d.patterns;
+  if (pt && pt.patterns && pt.patterns.length) {
+    html += `<div class="card" style="margin-top:14px">
+      <div class="card-title">${t('patterns')} <span class="tag ${cls(pt.riskLevel)}" style="margin-left:6px">${pt.riskLevel.toUpperCase()}</span></div>
+      <div class="stat-row">`;
+    pt.patterns.forEach(p => {
+      const emojiMap = { arbitrage:'📈', sandwich:'🥪', flash_loan:'💸', liquidation:'🏗️', dumping:'📉', accumulation:'📊', farming:'🌾', staking:'🔒', bridge_hop:'🌉', cex_deposit:'🏦', cex_withdrawal:'💳', nft_trading:'🎨', airdrop_claim:'🎁', token_launch:'🚀', mev_extraction:'🤖' };
+      const em = emojiMap[p.type] || '📌';
+      html += `<div class="stat" style="min-width:100px;text-align:center">
+        <div style="font-size:20px">${em}</div>
+        <div style="font-size:11px;font-weight:600;text-transform:capitalize">${p.type.replace(/_/g, ' ')}</div>
+        <div style="font-size:10px;color:#64748b">${p.confidence}% ${t('confidence')}</div>
+      </div>`;
+    });
+    html += `</div>`;
+    if (pt.dominantProfile) {
+      html += `<div style="margin-top:8px;font-size:11px;color:#64748b">${t('dominantProfile')}: <strong style="color:#e2e8f0;text-transform:capitalize">${pt.dominantProfile.replace(/_/g, ' ')}</strong></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Risk breakdown
+  const breakdown = [
+    { label: t('entity'), level: e.riskMultiplier >= 2 ? 'critical' : e.riskMultiplier >= 1.2 ? 'medium' : 'safe' },
+    { label: t('sanctions'), level: d.flags.sanctioned ? 'critical' : 'safe' },
+    { label: t('labels'), level: d.flags.flagged ? 'high' : 'safe' },
+    { label: t('exploitDB'), level: d.flags.exploitDb ? 'critical' : 'safe' },
+    { label: t('flowRisk'), level: fl.riskLevel },
+    { label: t('portfolioRisk'), level: pf.riskLevel },
+    { label: t('patterns'), level: pt ? pt.riskLevel : 'safe' },
+  ];
+
+  html += `<div class="card" style="margin-top:14px">
+    <div class="card-title">${t('riskBreakdown')}</div>
+    <div class="stat-row">`;
+  breakdown.forEach(b => {
+    const pct = { safe:10, low:30, medium:50, high:70, critical:90 }[b.level] || 10;
+    const color = { safe:'#22c55e', low:'#eab308', medium:'#eab308', high:'#f97316', critical:'#ef4444' }[b.level];
+    html += `<div class="stat" style="min-width:70px">
+      <div class="stat-label">${b.label}</div>
+      <div class="risk-bar-wrap" style="height:6px;margin:6px 0">
+        <div class="risk-bar-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <span class="tag ${cls(b.level)}">${b.level.toUpperCase()}</span>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  result.innerHTML = html;
+}
+
+async function scanBasic(addr, result) {
+  const r = await fetch('/api/scan?address=' + addr);
+  const data = await r.json();
+  if (data.error) { result.innerHTML = '<div class="error">' + data.error + '</div>'; return; }
+
+  let html = `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
+      <div>
+        <strong style="font-size:16px">${shorten(addr)}</strong>
+        <span class="tag ${cls(data.overallRisk)}" style="margin-left:6px">${data.overallRisk.toUpperCase()} ${data.overallRiskScore}/100</span>
+        ${data.cached ? '<span class="tag medium">CACHED</span>' : ''}
+      </div>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-top:4px">${data.totalTransactions} transfers · ${data.chains.join(', ') || 'none'} · ${data.totalInteractions} contracts</div>
+  </div>`;
+
+  if (data.sanctioned) html += '<div class="card" style="margin-bottom:14px;border-color:#ef4444"><span class="tag critical">SANCTIONED</span> WALLET IS SANCTIONED</div>';
+
+  if (data.summary && data.summary.length) {
+    html += `<div class="card" style="margin-bottom:14px"><ul class="summary-list">${data.summary.map(s => '<li>' + s + '</li>').join('')}</ul></div>`;
+  }
+
+  if (data.behavior) {
+    html += `<div class="card" style="margin-bottom:14px">
+      <div class="card-title">Wallet Behavior</div>
+      <div class="stat-row">
+        <div class="stat"><span class="stat-label">Age</span><div class="stat-val">${data.behavior.ageDays ?? '?'}d</div></div>
+        <div class="stat"><span class="stat-label">Contracts</span><div class="stat-val">${data.behavior.uniqueContracts}</div></div>
+        <div class="stat"><span class="stat-label">Tokens</span><div class="stat-val">${data.behavior.uniqueTokens}</div></div>
+        <div class="stat"><span class="stat-label">Most Active</span><div class="stat-val">${data.behavior.mostActiveChain || '?'}</div></div>
+      </div>
+    </div>`;
+  }
+
+  if (data.approvals && data.approvals.length) {
+    html += `<div class="card" style="margin-bottom:14px;border-color:#7f1d1d">
+      <div class="card-title">Risky Approvals (${data.approvals.length})</div>`;
+    for (const a of data.approvals.slice(0, 5)) {
+      html += `<div style="padding:6px 0;border-bottom:1px solid #1a1a2e;font-size:12px">
+        <strong>${a.tokenSymbol || a.contract.slice(0,10)}</strong>
+        <span style="color:#64748b">→ ${a.spender.slice(0,10)}</span>
+        <span class="tag ${cls(a.riskLevel)}" style="margin-left:4px">${a.riskLevel}</span>
+        <div style="color:#f97316;font-size:11px">${a.details}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  html += '<div class="hint">Sources: Alchemy · GoPlus · DEX Screener · CoinGecko · Etherscan · OFAC · PhishFort</div>';
+  result.innerHTML = html;
+}
+
+// Enter key
+document.getElementById('address').addEventListener('keydown', e => { if (e.key === 'Enter') scan(); });
 </script>
 </body>
 </html>

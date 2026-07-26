@@ -1,13 +1,19 @@
 import axios from 'axios';
 import { ContractVerification } from './types';
 
-const EXPLORERS: Record<string, { api: string; apikey: string }> = {
-  ethereum: { api: 'https://api.etherscan.io/api', apikey: '' },
-  bsc: { api: 'https://api.bscscan.com/api', apikey: '' },
-  polygon: { api: 'https://api.polygonscan.com/api', apikey: '' },
-  arbitrum: { api: 'https://api.arbiscan.io/api', apikey: '' },
-  optimism: { api: 'https://api-optimistic.etherscan.io/api', apikey: '' },
-  base: { api: 'https://api.basescan.org/api', apikey: '' },
+const EXPLORERS: Record<string, { api: string; apikeyEnv: string }> = {
+  ethereum: { api: 'https://api.etherscan.io/api', apikeyEnv: 'ETHERSCAN_API_KEY' },
+  bsc: { api: 'https://api.bscscan.com/api', apikeyEnv: 'BSCSCAN_API_KEY' },
+  polygon: { api: 'https://api.polygonscan.com/api', apikeyEnv: 'POLYGONSCAN_API_KEY' },
+  arbitrum: { api: 'https://api.arbiscan.io/api', apikeyEnv: 'ARBISCAN_API_KEY' },
+  optimism: { api: 'https://api-optimistic.etherscan.io/api', apikeyEnv: 'OPTIMISTIC_ETHERSCAN_API_KEY' },
+  base: { api: 'https://api.basescan.org/api', apikeyEnv: 'BASESCAN_API_KEY' },
+  zksync: { api: 'https://api-era.zksync.network/api', apikeyEnv: 'ZKSYNC_API_KEY' },
+  scroll: { api: 'https://api.scrollscan.com/api', apikeyEnv: 'SCROLL_API_KEY' },
+  linea: { api: 'https://api.lineascan.build/api', apikeyEnv: 'LINEA_API_KEY' },
+  blast: { api: 'https://api.blastscan.io/api', apikeyEnv: 'BLAST_API_KEY' },
+  avalanche: { api: 'https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api', apikeyEnv: '' },
+  fantom: { api: 'https://api.ftmscan.com/api', apikeyEnv: 'FTMSCAN_API_KEY' },
 };
 
 export class ContractVerifier {
@@ -17,18 +23,19 @@ export class ContractVerifier {
       return {
         address, chain,
         verified: null, compilerVersion: null, license: null,
-        riskLevel: 'medium', riskScore: 50,
+        riskLevel: 'medium', riskScore: 8,
         details: [`Unsupported chain: ${chain}`],
       };
     }
 
     try {
+      const apikey = process.env[explorer.apikeyEnv] || '';
       const res = await axios.get(explorer.api, {
         params: {
           module: 'contract',
           action: 'getsourcecode',
           address,
-          apikey: explorer.apikey || undefined,
+          apikey,
         },
         timeout: 10000,
       });
@@ -62,7 +69,7 @@ export class ContractVerifier {
       address, chain,
       verified: false,
       compilerVersion: null, license: null,
-      riskLevel: 'high', riskScore: 70,
+      riskLevel: 'high', riskScore: 40,
       details: [reason],
     };
   }

@@ -1,71 +1,140 @@
-import { TokenRisk, ContractVerification, SanctionCheck, DexScreenerResult, CgListResult, EtherscanLabelResult, WalletAnalysis } from './types';
+import { TokenRisk, ContractVerification, SanctionCheck, DexScreenerResult, CgListResult, EtherscanLabelResult, WalletBehavior, ApprovalCheck } from './types';
+
+export interface RiskWeights {
+  sanction: number;
+  label: number;
+  tokenCritical: number;
+  tokenHigh: number;
+  tokenMedium: number;
+  tokenLow: number;
+  unverifiedContract: number;
+  dexCritical: number;
+  dexHigh: number;
+  dexMedium: number;
+  notListed: number;
+  approvalFlagged: number;
+  approvalUnlimited: number;
+  behaviorHigh: number;
+  behaviorMedium: number;
+}
+
+export const DEFAULT_WEIGHTS: RiskWeights = {
+  sanction: 100,
+  label: 70,
+  tokenCritical: 40,
+  tokenHigh: 25,
+  tokenMedium: 12,
+  tokenLow: 4,
+  unverifiedContract: 15,
+  dexCritical: 25,
+  dexHigh: 15,
+  dexMedium: 8,
+  notListed: 10,
+  approvalFlagged: 30,
+  approvalUnlimited: 12,
+  behaviorHigh: 15,
+  behaviorMedium: 7,
+};
+
+export interface FullAnalysis {
+  address: string;
+  sanctioned: SanctionCheck;
+  label: EtherscanLabelResult;
+  exploit: EtherscanLabelResult;
+  behavior: WalletBehavior;
+  approvals: ApprovalCheck[];
+  contracts: TokenRisk[];
+  totalRiskScore: number;
+  totalRiskLevel: 'safe' | 'low' | 'medium' | 'high' | 'critical';
+  summary: string[];
+}
 
 export class RiskScorer {
-  analyzeWallet(
+  private weights: RiskWeights;
+
+  constructor(weights?: Partial<RiskWeights>) {
+    this.weights = { ...DEFAULT_WEIGHTS, ...(weights || {}) };
+  }
+
+  analyze(
     address: string,
     sanction: SanctionCheck,
+    label: EtherscanLabelResult,
+    exploit: EtherscanLabelResult,
+    behavior: WalletBehavior,
+    approvals: ApprovalCheck[],
     contracts: TokenRisk[],
     verifications: ContractVerification[],
     dexResults: DexScreenerResult[],
     cgResults: CgListResult[],
-    labelResults: EtherscanLabelResult[],
-  ): WalletAnalysis {
-    const allDetails: string[] = [];
-    let totalScore = 0;
-    const maxScore = contracts.length * 100 + 100 + dexResults.length * 100 + cgResults.length * 100 + 100;
+  ): FullAnalysis {
+    let score = 0;
+    const summary: string[] = [];
 
-    totalScore += sanction.riskScore;
+    score += sanction.riskScore;
+    if (sanction.sanctioned) summary.push('WALLET IS SANCTIONED');
 
-    for (const ct of contracts) {
-      totalScore += ct.riskScore;
-      allDetails.push(...ct.details.map(d => `[${ct.chain}:${ct.address.slice(0, 8)}] ${d}`));
+    score += label.riskScore;
+    if (label.flagged) summary.push(`Wallet flagged: ${label.label}`);
+
+    score += exploit.riskScore;
+    if (exploit.flagged) summary.push(`Wallet in exploit DB: ${exploit.label}`);
+
+    score += behavior.riskScore;
+    if (behavior.riskLevel === 'high' || behavior.riskLevel === 'critical') {
+      summary.push('Suspicious wallet behavior');
+    }
+
+    score += approvals.reduce((s, a) => s + a.riskScore, 0);
+    const flaggedApprovals = approvals.filter(a => /flagged/i.test(a.details));
+    if (flaggedApprovals.length) summary.push('Risky token approvals detected');
+
+    for (const c of contracts) {
+      if (c.riskLevel === 'critical') score += this.weights.tokenCritical;
+      else if (c.riskLevel === 'high') score += this.weights.tokenHigh;
+      else if (c.riskLevel === 'medium') score += this.weights.tokenMedium;
+      else if (c.riskLevel === 'low') score += this.weights.tokenLow;
+
+      if (c.isHoneypot) score += 25;
+      if (c.canOwnerMint) score += 12;
+      if (c.hasBlacklist) score += 10;
+      if (!c.isOpenSource) score += 8;
+      if (c.riskLevel === 'critical') summary.push(`Critical risk token: ${c.address.slice(0, 10)}`);
     }
 
     for (const v of verifications) {
-      if (!v.verified) {
-        allDetails.push(...v.details.map(d => `[${v.chain}:${v.address.slice(0, 8)}] ${d}`));
-      }
+      if (v.verified === false && v.riskScore > 0) score += this.weights.unverifiedContract;
     }
 
     for (const d of dexResults) {
-      totalScore += d.riskScore;
-      allDetails.push(...d.details.map(s => `[DEX] ${s}`));
+      if (d.riskLevel === 'critical') score += this.weights.dexCritical;
+      else if (d.riskLevel === 'high') score += this.weights.dexHigh;
+      else if (d.riskLevel === 'medium') score += this.weights.dexMedium;
     }
 
     for (const c of cgResults) {
-      totalScore += c.riskScore;
-      allDetails.push(...c.details.map(s => `[CG] ${s}`));
+      if (!c.listed) score += this.weights.notListed;
     }
 
-    for (const l of labelResults) {
-      totalScore += l.riskScore;
-      allDetails.push(...l.details.map(s => `[Label] ${s}`));
-    }
+    score = Math.min(100, score);
 
-    const normalizedScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-
-    const totalRiskLevel = normalizedScore >= 70 ? 'critical'
-      : normalizedScore >= 50 ? 'high'
-      : normalizedScore >= 30 ? 'medium'
-      : normalizedScore >= 10 ? 'low'
+    const totalRiskLevel = score >= 70 ? 'critical'
+      : score >= 50 ? 'high'
+      : score >= 30 ? 'medium'
+      : score >= 10 ? 'low'
       : 'safe';
 
-    const summary: string[] = [];
-    if (sanction.sanctioned) summary.push('WALLET IS SANCTIONED');
-    if (contracts.some(c => c.isHoneypot)) summary.push('Honeypot contracts detected');
-    if (contracts.some(c => !c.isOpenSource)) summary.push('Unverified contracts');
-    if (contracts.some(c => c.canOwnerMint)) summary.push('Contracts with owner mint');
-    if (contracts.some(c => c.riskLevel === 'critical')) summary.push('Critical risk contracts');
-    if (dexResults.some(d => d.riskLevel === 'critical')) summary.push('Critical DEX risk (low liquidity / wash trading)');
-    if (cgResults.some(c => !c.listed)) summary.push('Tokens not listed on CoinGecko');
-    if (labelResults.some(l => l.flagged)) summary.push('Wallet flagged in scam database');
     if (summary.length === 0) summary.push('No major risk flags');
 
     return {
       address,
       sanctioned: sanction,
-      topContracts: contracts,
-      totalRiskScore: normalizedScore,
+      label,
+      exploit,
+      behavior,
+      approvals,
+      contracts,
+      totalRiskScore: score,
       totalRiskLevel,
       summary,
     };
